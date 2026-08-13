@@ -43,8 +43,17 @@ changed the source.
 4. **Restart `dsh web`**, then switch themes from
    **Settings → General → Colorscheme**.
 
-> If your environment manages profile dependencies with `dsh plugin` (pnpm
-> based), you can replace step 2 with `dsh plugin --profile web add <plugin path>`.
+> **If you have pnpm installed**, you can replace step 2 with `dsh plugin`:
+> it forwards its arguments verbatim to pnpm, running inside the profile
+> directory. Add the plugin by its **absolute path**:
+>
+> ```sh
+> dsh plugin --profile web add /absolute/path/to/dsh-plugin-colorscheme
+> ```
+>
+> This registers the plugin as a profile dependency (recorded in the profile's
+> `package.json` and installed into its `node_modules`), equivalent to the
+> symlink in step 2. Steps 3–4 are still required.
 
 ## Preview
 

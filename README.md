@@ -40,8 +40,15 @@
 
 4. **重启 `dsh web`**，打开 **设置 → 通用 → 配色方案** 即可切换主题。
 
-> 如果你的环境用 `dsh plugin` 管理依赖（基于 pnpm），也可以用
-> `dsh plugin --profile web add <插件路径>` 代替第 2 步。
+> **装了 pnpm 的话**，也可以用 `dsh plugin` 代替第 2 步：它会把这些参数原样
+> 转交给 pnpm，在 profile 目录里安装。用插件目录的**绝对路径**执行：
+>
+> ```sh
+> dsh plugin --profile web add /绝对/路径/dsh-plugin-colorscheme
+> ```
+>
+> 这会把这插件登记为 profile 的依赖（写入 profile 的 `package.json` 并安装到
+> 其 `node_modules`），与第 2 步的软链接效果等价；之后仍需执行第 3、4 步。
 
 ## 预览
 
