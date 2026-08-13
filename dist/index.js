@@ -1,7 +1,7 @@
 // src/server/index.ts
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import z from "@deepseek-ai/schemastery";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
@@ -411,7 +411,7 @@ var customThemeSchema = z.object({
   tokens: z.dict(z.string()).default({})
 });
 var SettingsSchema = z.object({
-  /** Last colorscheme id chosen in the picker ('' = follow built-in preference). */
+  /** Manual selection fallback (settings.yaml); the picker persists via the route. */
   selection: z.string().default(""),
   /** Inline user themes from the settings user layer (settings.yaml). */
   customThemes: z.array(customThemeSchema).default([]),
@@ -421,6 +421,7 @@ var SettingsSchema = z.object({
   defaultTheme: z.string().default(""),
   catalogPath: z.string().default("/colorscheme/themes.json")
 });
+var SELECTION_FILE = ".colorscheme.json";
 function resolveThemesDir(configDir) {
   if (configDir) return isAbsolute(configDir) ? configDir : resolve(process.cwd(), configDir);
   const home = process.env.DSH_HOME || join(homedir(), ".dsh");
@@ -478,6 +479,20 @@ function readUserThemes(themesDir, errors) {
   }
   return out;
 }
+function readPersistedSelection(themesDir) {
+  try {
+    const raw = JSON.parse(readFileSync(join(themesDir, SELECTION_FILE), "utf8"));
+    if (isRecord(raw) && typeof raw.selection === "string") return raw.selection;
+  } catch {
+  }
+  return "";
+}
+function writePersistedSelection(themesDir, selection) {
+  const file = join(themesDir, SELECTION_FILE);
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, JSON.stringify({ selection }), "utf8");
+  renameSync(tmp, file);
+}
 function buildCatalog(config, ctx) {
   const themesDir = resolveThemesDir(config.themesDir);
   try {
@@ -488,6 +503,7 @@ function buildCatalog(config, ctx) {
   const userThemes = readUserThemes(themesDir, errors);
   const settings = ctx.get("settings");
   let settingsThemes = [];
+  let manualSelection = "";
   if (settings !== void 0) {
     const section = settings.get(NS);
     if (section?.customThemes) {
@@ -499,6 +515,7 @@ function buildCatalog(config, ctx) {
         }
       }
     }
+    if (typeof section?.selection === "string") manualSelection = section.selection;
   }
   const seen = /* @__PURE__ */ new Set();
   const dedupe = (entry, kind) => {
@@ -512,6 +529,7 @@ function buildCatalog(config, ctx) {
   return {
     version: 1,
     themesDir,
+    selection: readPersistedSelection(themesDir) || manualSelection,
     presets: PRESETS.map((p) => dedupe(p, "preset")).filter((p) => p !== null).map((p) => ({
       ...p,
       tokens: p.roles ? generateTokens(p.roles, p.colorScheme) : p.tokens
@@ -522,6 +540,15 @@ function buildCatalog(config, ctx) {
     errors
   };
 }
+function jsonResponse(res, status, body) {
+  const data = JSON.stringify(body);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "content-length": Buffer.byteLength(data)
+  });
+  res.end(data);
+}
 function apply(ctx, config) {
   ctx.inject(["settings"], (settingsCtx) => {
     settingsCtx.settings.register(NS, SettingsSchema);
@@ -531,15 +558,37 @@ function apply(ctx, config) {
       () => httpCtx.webServer.register({
         kind: "exact",
         path: config.catalogPath,
-        handler: (_req, res) => {
-          const catalog = buildCatalog(config, httpCtx);
-          const body = JSON.stringify(catalog);
-          res.writeHead(200, {
-            "content-type": "application/json; charset=utf-8",
-            "cache-control": "no-store",
-            "content-length": Buffer.byteLength(body)
-          });
-          res.end(body);
+        handler: async (req, res) => {
+          if (req.method === "GET" || req.method === "HEAD") {
+            jsonResponse(res, 200, buildCatalog(config, httpCtx));
+            return;
+          }
+          if (req.method === "POST") {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            let parsed;
+            try {
+              parsed = JSON.parse(body);
+            } catch {
+              jsonResponse(res, 400, { ok: false, error: "invalid JSON body" });
+              return;
+            }
+            const selection = isRecord(parsed) && typeof parsed.selection === "string" ? parsed.selection : "";
+            const catalog = buildCatalog(config, httpCtx);
+            const known = new Set([...catalog.presets, ...catalog.userThemes, ...catalog.settingsThemes].map((t) => t.id));
+            if (selection !== "" && !known.has(selection)) {
+              jsonResponse(res, 400, { ok: false, error: `unknown theme id: ${selection}` });
+              return;
+            }
+            try {
+              writePersistedSelection(catalog.themesDir, selection);
+              jsonResponse(res, 200, { ok: true, selection });
+            } catch (e) {
+              jsonResponse(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) });
+            }
+            return;
+          }
+          jsonResponse(res, 405, { ok: false, error: "method not allowed" });
         }
       }),
       "colorscheme: catalog route"

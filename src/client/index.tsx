@@ -5,9 +5,10 @@
  *   `ctx.theme` (the DSH theme service), restores the persisted selection,
  *   and contributes a "Colorscheme" preference row to the General settings
  *   section (mirroring the built-in Appearance row).
- * - Third-party theme selection is process-local in ThemeRuntime, so this
- *   plugin persists the chosen id in its own `colorscheme` settings
- *   namespace and re-applies it on load.
+ * - Third-party theme selection is process-local in ThemeRuntime and the
+ *   browser settings wire only exposes built-in namespaces, so the plugin
+ *   persists the chosen id through its own catalog route (POST) and
+ *   re-applies it on load.
  */
 import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -175,7 +176,6 @@ async function loadCatalog(): Promise<ThemeCatalog> {
 /** Client plugin body. */
 export function apply(ctx: ClientContext): void {
   const theme = ctx.theme
-  const scope = ctx.settingsScope.bind({ namespace: NS })
   // The Appearance row's durable preference (light/dark/system) — the target
   // of "跟随外观 / Follow appearance".
   const appearanceScope = ctx.settingsScope.bind({ namespace: THEME_NS })
@@ -194,10 +194,17 @@ export function apply(ctx: ClientContext): void {
     bound.sync(selection, revision, toRowThemes(theme.getTheme(), nameById), error)
   }
 
-  /** Read the persisted colorscheme selection from our settings namespace. */
-  const readSelection = () => {
-    const value = scope.getSnapshot().value as { selection?: string } | undefined
-    return value?.selection ?? ''
+  /** Persist the picker selection through the catalog route (server-side). */
+  const saveSelection = (id: string) => {
+    void fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ selection: id }),
+    })
+      .then((res) => {
+        if (!res.ok) console.warn('[colorscheme] failed to persist selection', res.status)
+      })
+      .catch((e: unknown) => console.warn('[colorscheme] failed to persist selection', e))
   }
 
   /** Revert to the durable Appearance preference (light / dark / system). */
@@ -241,8 +248,8 @@ export function apply(ctx: ClientContext): void {
         console.warn('[colorscheme] failed to register theme', entry.id, e)
       }
     }
-    // Precedence: persisted user selection > config default > follow appearance.
-    const saved = readSelection()
+    // Precedence: persisted selection (from the catalog) > config default > follow appearance.
+    const saved = catalog.selection
     if (saved && theme.getTheme().themes.some((t) => t.id === saved)) {
       selection = saved
     } else if (catalog.defaultTheme) {
@@ -259,20 +266,6 @@ export function apply(ctx: ClientContext): void {
       console.warn('[colorscheme] catalog load failed', e)
       publishRow(typeof e === 'object' && e !== null && 'message' in e ? String((e as { message: unknown }).message) : String(e))
     })
-
-  // Keep the picker in sync when settings change elsewhere (another tab, an
-  // editor writing settings.yaml).
-  ctx.effect(
-    () =>
-      scope.subscribe(() => {
-        const saved = readSelection()
-        if (saved && saved !== selection) {
-          selection = saved
-          applySelection(saved)
-        }
-      }),
-    'colorscheme: settings scope subscription',
-  )
 
   // Clean up theme registrations when this plugin unloads (HMR / config edit).
   ctx.effect(
@@ -308,10 +301,10 @@ export function apply(ctx: ClientContext): void {
                 // Return to the Appearance preference and forget our
                 // persisted colorscheme.
                 followAppearance()
-                void scope.unset('selection').catch(() => {})
+                saveSelection('')
               } else {
                 applySelection(id)
-                void scope.set('selection', id).catch(() => {})
+                saveSelection(id)
               }
             },
           }

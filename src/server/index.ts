@@ -1,18 +1,24 @@
 /**
  * Colorscheme plugin — server half.
  *
- * - Registers the `colorscheme` settings namespace (durable `selection` and
- *   `customThemes` user layer).
+ * - Registers the `colorscheme` settings namespace (server-side `customThemes`
+ *   user layer and a manual `selection` fallback; the namespace is NOT exposed
+ *   on the browser settings wire, which only serves the built-in allowlist).
  * - Serves the theme catalog at `catalogPath` (default
  *   `/colorscheme/themes.json`): preset themes plus user themes read from
  *   `themesDir` (default `$DSH_HOME/themes`) plus settings-layer themes.
+ * - Persists the picker selection through the same route: GET returns the
+ *   catalog with the saved `selection`; POST `{selection}` stores it in a
+ *   state file inside `themesDir` (atomic write). The browser client cannot
+ *   write arbitrary settings namespaces, so the plugin owns its own
+ *   persistence instead of the settings wire.
  * - User theme files may carry either expanded `tokens` (--dsw-* overrides)
  *   or semantic `roles` (expanded by the shared generator).
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { generateTokens, type ThemeRoles } from '../shared/generate.ts'
@@ -36,7 +42,7 @@ export const Config: z<Config> = z.object({
   catalogPath: z.string().default('/colorscheme/themes.json'),
 })
 
-/** Settings namespace owned by this plugin. */
+/** Settings namespace owned by this plugin (server-side surface only). */
 const NS = settingsNamespace('colorscheme')
 
 const customThemeSchema = z.object({
@@ -47,7 +53,7 @@ const customThemeSchema = z.object({
 })
 
 const SettingsSchema = z.object({
-  /** Last colorscheme id chosen in the picker ('' = follow built-in preference). */
+  /** Manual selection fallback (settings.yaml); the picker persists via the route. */
   selection: z.string().default(''),
   /** Inline user themes from the settings user layer (settings.yaml). */
   customThemes: z.array(customThemeSchema).default([]),
@@ -57,6 +63,9 @@ const SettingsSchema = z.object({
   defaultTheme: z.string().default(''),
   catalogPath: z.string().default('/colorscheme/themes.json'),
 })
+
+/** State file holding the picker selection, inside the themes directory. */
+const SELECTION_FILE = '.colorscheme.json'
 
 function resolveThemesDir(configDir: string): string {
   if (configDir) return isAbsolute(configDir) ? configDir : resolve(process.cwd(), configDir)
@@ -124,6 +133,25 @@ function readUserThemes(themesDir: string, errors: Record<string, string>): Them
   return out
 }
 
+/** Read the persisted picker selection from the state file ('' when absent). */
+function readPersistedSelection(themesDir: string): string {
+  try {
+    const raw = JSON.parse(readFileSync(join(themesDir, SELECTION_FILE), 'utf8'))
+    if (isRecord(raw) && typeof raw.selection === 'string') return raw.selection
+  } catch {
+    // absent or malformed — treat as no selection
+  }
+  return ''
+}
+
+/** Persist the picker selection with an atomic write (tmp + rename). */
+function writePersistedSelection(themesDir: string, selection: string): void {
+  const file = join(themesDir, SELECTION_FILE)
+  const tmp = `${file}.tmp`
+  writeFileSync(tmp, JSON.stringify({ selection }), 'utf8')
+  renameSync(tmp, file)
+}
+
 /** Build the catalog document. */
 function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
   const themesDir = resolveThemesDir(config.themesDir)
@@ -137,8 +165,9 @@ function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
 
   const settings = ctx.get('settings')
   let settingsThemes: ThemeEntry[] = []
+  let manualSelection = ''
   if (settings !== undefined) {
-    const section = settings.get(NS) as { customThemes?: unknown[] } | undefined
+    const section = settings.get(NS) as { customThemes?: unknown[]; selection?: string } | undefined
     if (section?.customThemes) {
       for (const [i, raw] of section.customThemes.entries()) {
         try {
@@ -148,6 +177,7 @@ function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
         }
       }
     }
+    if (typeof section?.selection === 'string') manualSelection = section.selection
   }
 
   // Reject duplicate ids across sources (ThemeRuntime is single-occupant per id).
@@ -164,6 +194,7 @@ function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
   return {
     version: 1,
     themesDir,
+    selection: readPersistedSelection(themesDir) || manualSelection,
     presets: PRESETS.map((p) => dedupe(p, 'preset')).filter((p): p is ThemeEntry => p !== null).map((p) => ({
       ...p,
       tokens: p.roles ? generateTokens(p.roles, p.colorScheme) : p.tokens,
@@ -175,7 +206,18 @@ function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
   }
 }
 
-/** Plugin body: register the settings namespace and the catalog route. */
+/** JSON helper for the route handler. */
+function jsonResponse(res: import('node:http').ServerResponse, status: number, body: unknown): void {
+  const data = JSON.stringify(body)
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'content-length': Buffer.byteLength(data),
+  })
+  res.end(data)
+}
+
+/** Plugin body: register the settings namespace and the catalog/selection route. */
 export function apply(ctx: Context, config: Config): void {
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(NS, SettingsSchema)
@@ -186,15 +228,37 @@ export function apply(ctx: Context, config: Config): void {
         httpCtx.webServer!.register({
           kind: 'exact',
           path: config.catalogPath,
-          handler: (_req, res) => {
-            const catalog = buildCatalog(config, httpCtx)
-            const body = JSON.stringify(catalog)
-            res.writeHead(200, {
-              'content-type': 'application/json; charset=utf-8',
-              'cache-control': 'no-store',
-              'content-length': Buffer.byteLength(body),
-            })
-            res.end(body)
+          handler: async (req, res) => {
+            if (req.method === 'GET' || req.method === 'HEAD') {
+              jsonResponse(res, 200, buildCatalog(config, httpCtx))
+              return
+            }
+            if (req.method === 'POST') {
+              let body = ''
+              for await (const chunk of req) body += chunk
+              let parsed: unknown
+              try {
+                parsed = JSON.parse(body)
+              } catch {
+                jsonResponse(res, 400, { ok: false, error: 'invalid JSON body' })
+                return
+              }
+              const selection = isRecord(parsed) && typeof parsed.selection === 'string' ? parsed.selection : ''
+              const catalog = buildCatalog(config, httpCtx)
+              const known = new Set([...catalog.presets, ...catalog.userThemes, ...catalog.settingsThemes].map((t) => t.id))
+              if (selection !== '' && !known.has(selection)) {
+                jsonResponse(res, 400, { ok: false, error: `unknown theme id: ${selection}` })
+                return
+              }
+              try {
+                writePersistedSelection(catalog.themesDir, selection)
+                jsonResponse(res, 200, { ok: true, selection })
+              } catch (e) {
+                jsonResponse(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) })
+              }
+              return
+            }
+            jsonResponse(res, 405, { ok: false, error: 'method not allowed' })
           },
         }),
       'colorscheme: catalog route',

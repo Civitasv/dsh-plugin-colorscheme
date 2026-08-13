@@ -39,6 +39,8 @@ export interface ThemeCatalog {
   version: 1
   /** Where user themes are read from (absolute path, may not exist yet). */
   themesDir: string
+  /** Last picker selection, persisted by the plugin ('' = follow built-in preference). */
+  selection: string
   /** Preset themes bundled with the plugin. */
   presets: ThemeEntry[]
   /** User themes from the themes directory. */
