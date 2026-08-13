@@ -186,12 +186,27 @@ export function apply(ctx: ClientContext): void {
 
   const store = createRowStore()
   let bound: { sync: (selection: string, revision: number, themes: RowTheme[], error: string) => void } | undefined
+  /** Persisted/desired colorscheme id ('' = follow the Appearance preference). */
   let selection = DEFAULT_ID
   let revision = -1
+  /**
+   * Load-time watchdog: the theme service adopts the durable ui-theme
+   * preference asynchronously, which can override our restore right after we
+   * apply it. While armed, a theme/change back to a built-in preference
+   * re-applies our selection once.
+   */
+  let restoreArmed = false
+  let restoreTimer: ReturnType<typeof setTimeout> | undefined
+
+  /** The row highlights the theme the service actually resolved. */
+  const activeSelection = () => {
+    const pref = theme.getTheme().preference
+    return pref === 'light' || pref === 'dark' || pref === 'system' ? DEFAULT_ID : pref
+  }
 
   const publishRow = (error = '') => {
     if (!bound) return
-    bound.sync(selection, revision, toRowThemes(theme.getTheme(), nameById), error)
+    bound.sync(activeSelection(), revision, toRowThemes(theme.getTheme(), nameById), error)
   }
 
   /** Persist the picker selection through the catalog route (server-side). */
@@ -218,9 +233,27 @@ export function apply(ctx: ClientContext): void {
     }
   }
 
-  // Mirror the live theme state into the row.
+  /** Arm the load-time restore watchdog with a bounded window. */
+  const armRestore = () => {
+    restoreArmed = true
+    if (restoreTimer) clearTimeout(restoreTimer)
+    restoreTimer = setTimeout(() => {
+      restoreArmed = false
+    }, 5000)
+  }
+
+  // Mirror the live theme state into the row; re-apply once if the theme
+  // service's async settings adoption overrode our restore.
   ctx.on('theme/change', () => {
     revision = theme.getTheme().revision
+    if (restoreArmed) {
+      const pref = theme.getTheme().preference
+      if (pref === 'light' || pref === 'dark' || pref === 'system') {
+        restoreArmed = false
+        if (restoreTimer) clearTimeout(restoreTimer)
+        applySelection(selection)
+      }
+    }
     publishRow()
   })
 
@@ -252,8 +285,10 @@ export function apply(ctx: ClientContext): void {
     const saved = catalog.selection
     if (saved && theme.getTheme().themes.some((t) => t.id === saved)) {
       selection = saved
+      armRestore()
     } else if (catalog.defaultTheme) {
       selection = catalog.defaultTheme
+      armRestore()
     }
     applySelection(selection)
     revision = theme.getTheme().revision
@@ -297,6 +332,9 @@ export function apply(ctx: ClientContext): void {
           return {
             setTheme: (id: string) => {
               selection = id
+              // A deliberate pick wins over the load-time watchdog.
+              restoreArmed = false
+              if (restoreTimer) clearTimeout(restoreTimer)
               if (id === DEFAULT_ID) {
                 // Return to the Appearance preference and forget our
                 // persisted colorscheme.
