@@ -1,0 +1,30 @@
+{
+  "id": "my-nord-light",
+  "name": "My Nord Light",
+  "colorScheme": "light",
+  "meta": {
+    "author": "You",
+    "license": "MIT",
+    "description": "A hand-tuned light variant of the Nord palette."
+  },
+  "roles": {
+    "bg": "#eceff4",
+    "fg": "#2e3440",
+    "accent": "#5e81ac",
+    "bgElevated": "#e5e9f0",
+    "bgSidebar": "#e5e9f0",
+    "bgOverlay": "#e5e9f0",
+    "bgInput": "#ffffff",
+    "bgCode": "#e8ecf2",
+    "bgHover": "#d8dee9",
+    "bgActive": "#c9d3e0",
+    "fgSecondary": "#3b4252",
+    "fgMuted": "#7b88a1",
+    "onAccent": "#ffffff",
+    "border": "#d8dee9",
+    "success": "#8fbcbb",
+    "error": "#bf616a",
+    "warn": "#d08770",
+    "scrollbar": "#c9d3e0"
+  }
+}
