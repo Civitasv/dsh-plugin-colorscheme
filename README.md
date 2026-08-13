@@ -11,6 +11,38 @@
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 - 支持三种用户扩展方式（见下）
 
+## 安装
+
+本仓库已包含构建产物（`client.js` 与 `dist/`），克隆后可直接使用；只有修改过
+源码才需要先执行 `npm install && npm run build`。
+
+1. **克隆并进入目录**：
+
+   ```sh
+   git clone https://github.com/Civitasv/dsh-plugin-colorscheme.git
+   cd dsh-plugin-colorscheme
+   ```
+
+2. **让 DSH 能解析它**：把插件链接进 profile 的依赖目录（与 dsh 安装的包
+   同层）：
+
+   ```sh
+   ln -sfn "$PWD" ~/.dsh/profiles/node_modules/dsh-plugin-colorscheme
+   ```
+
+3. **注册到配置**：编辑 `~/.dsh/profiles/web/cordis.patch.yml`：
+
+   ```yaml
+   - insert:
+       - id: colorscheme
+         name: dsh-plugin-colorscheme
+   ```
+
+4. **重启 `dsh web`**，打开 **设置 → 通用 → 配色方案** 即可切换主题。
+
+> 如果你的环境用 `dsh plugin` 管理依赖（基于 pnpm），也可以用
+> `dsh plugin --profile web add <插件路径>` 代替第 2 步。
+
 ## 预览
 
 设置 → 通用 → **配色方案** 选择器（外观行下方，点击即切换并持久化）：

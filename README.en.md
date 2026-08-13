@@ -12,6 +12,40 @@ is restored after a refresh.
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 - Three ways to extend (below)
 
+## Installation
+
+This repository ships the built artifacts (`client.js` and `dist/`), so a clone
+works out of the box. You only need `npm install && npm run build` if you
+changed the source.
+
+1. **Clone and enter the directory**:
+
+   ```sh
+   git clone https://github.com/Civitasv/dsh-plugin-colorscheme.git
+   cd dsh-plugin-colorscheme
+   ```
+
+2. **Make it resolvable by DSH**: link the plugin into the profile's dependency
+   directory (same level as the packages the dsh installation ships):
+
+   ```sh
+   ln -sfn "$PWD" ~/.dsh/profiles/node_modules/dsh-plugin-colorscheme
+   ```
+
+3. **Register it in the config**: edit `~/.dsh/profiles/web/cordis.patch.yml`:
+
+   ```yaml
+   - insert:
+       - id: colorscheme
+         name: dsh-plugin-colorscheme
+   ```
+
+4. **Restart `dsh web`**, then switch themes from
+   **Settings → General → Colorscheme**.
+
+> If your environment manages profile dependencies with `dsh plugin` (pnpm
+> based), you can replace step 2 with `dsh plugin --profile web add <plugin path>`.
+
 ## Preview
 
 The **Colorscheme** picker in Settings → General (below the Appearance row;
