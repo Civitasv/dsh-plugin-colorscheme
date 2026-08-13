@@ -189,14 +189,30 @@ export function apply(ctx: ClientContext): void {
   /** Persisted/desired colorscheme id ('' = follow the Appearance preference). */
   let selection = DEFAULT_ID
   let revision = -1
+
   /**
-   * Load-time watchdog: the theme service adopts the durable ui-theme
-   * preference asynchronously, which can override our restore right after we
-   * apply it. While armed, a theme/change back to a built-in preference
-   * re-applies our selection once.
+   * Presenter mirror. The official ui-layout presenter applies the resolved
+   * theme to <body> but its event delivery from this fiber is unreliable at
+   * load (the theme service also asynchronously adopts the durable ui-theme
+   * preference, flipping the palette back). This plugin therefore applies the
+   * active theme's tokens itself, and re-asserts the persisted selection for
+   * a bounded load window. Idempotent with the official presenter — same
+   * values, same targets.
    */
-  let restoreArmed = false
-  let restoreTimer: ReturnType<typeof setTimeout> | undefined
+  const appliedTokens: string[] = []
+  const applyActiveTokens = () => {
+    const active = theme.getTheme().active
+    document.documentElement.style.colorScheme = active.colorScheme
+    const body = document.body
+    if (active.colorScheme === 'dark') body.setAttribute('data-ds-dark-theme', '')
+    else body.removeAttribute('data-ds-dark-theme')
+    for (const name of appliedTokens) body.style.removeProperty(name)
+    appliedTokens.length = 0
+    for (const [name, value] of Object.entries(active.tokens)) {
+      body.style.setProperty(name, value)
+      appliedTokens.push(name)
+    }
+  }
 
   /** The row highlights the theme the service actually resolved. */
   const activeSelection = () => {
@@ -233,27 +249,38 @@ export function apply(ctx: ClientContext): void {
     }
   }
 
-  /** Arm the load-time restore watchdog with a bounded window. */
-  const armRestore = () => {
-    restoreArmed = true
-    if (restoreTimer) clearTimeout(restoreTimer)
-    restoreTimer = setTimeout(() => {
-      restoreArmed = false
-    }, 5000)
+  /**
+   * Re-assert the persisted selection for a bounded load window. The theme
+   * service asynchronously adopts the durable ui-theme preference after we
+   * restore, and event delivery from this fiber to the official presenter is
+   * unreliable — so while the window is open we keep pushing our selection
+   * (and applying its tokens) until the window closes. Never fights later
+   * user actions: the window only spans the load-time adoption.
+   */
+  let enforceTimer: ReturnType<typeof setInterval> | undefined
+  const stopEnforce = () => {
+    if (enforceTimer) {
+      clearInterval(enforceTimer)
+      enforceTimer = undefined
+    }
   }
-
-  // Mirror the live theme state into the row; re-apply once if the theme
-  // service's async settings adoption overrode our restore.
-  ctx.on('theme/change', () => {
-    revision = theme.getTheme().revision
-    if (restoreArmed) {
-      const pref = theme.getTheme().preference
-      if (pref === 'light' || pref === 'dark' || pref === 'system') {
-        restoreArmed = false
-        if (restoreTimer) clearTimeout(restoreTimer)
-        applySelection(selection)
+  const enforceSelection = () => {
+    if (selection === DEFAULT_ID) return
+    if (theme.getTheme().preference !== selection) {
+      try {
+        theme.setTheme(selection)
+      } catch {
+        // not registered yet — the next tick retries
       }
     }
+    applyActiveTokens()
+  }
+
+  // Mirror the live theme state into the row and keep the active tokens on
+  // <body> for whatever events this fiber does receive.
+  ctx.on('theme/change', () => {
+    revision = theme.getTheme().revision
+    applyActiveTokens()
     publishRow()
   })
 
@@ -285,12 +312,17 @@ export function apply(ctx: ClientContext): void {
     const saved = catalog.selection
     if (saved && theme.getTheme().themes.some((t) => t.id === saved)) {
       selection = saved
-      armRestore()
     } else if (catalog.defaultTheme) {
       selection = catalog.defaultTheme
-      armRestore()
     }
     applySelection(selection)
+    applyActiveTokens()
+    if (selection !== DEFAULT_ID) {
+      // Cover the load-time adoption flips with a bounded re-assert loop.
+      stopEnforce()
+      enforceTimer = setInterval(enforceSelection, 400)
+      setTimeout(stopEnforce, 5000)
+    }
     revision = theme.getTheme().revision
     publishRow()
   }
@@ -302,7 +334,8 @@ export function apply(ctx: ClientContext): void {
       publishRow(typeof e === 'object' && e !== null && 'message' in e ? String((e as { message: unknown }).message) : String(e))
     })
 
-  // Clean up theme registrations when this plugin unloads (HMR / config edit).
+  // Clean up theme registrations and applied tokens when this plugin unloads
+  // (HMR / config edit).
   ctx.effect(
     () => () => {
       for (const dispose of disposers) {
@@ -313,6 +346,9 @@ export function apply(ctx: ClientContext): void {
         }
       }
       disposers.length = 0
+      const body = document.body
+      for (const name of appliedTokens) body.style.removeProperty(name)
+      appliedTokens.length = 0
     },
     'colorscheme: theme registrations',
   )
@@ -332,9 +368,8 @@ export function apply(ctx: ClientContext): void {
           return {
             setTheme: (id: string) => {
               selection = id
-              // A deliberate pick wins over the load-time watchdog.
-              restoreArmed = false
-              if (restoreTimer) clearTimeout(restoreTimer)
+              // A deliberate pick wins over the load-time enforcement loop.
+              stopEnforce()
               if (id === DEFAULT_ID) {
                 // Return to the Appearance preference and forget our
                 // persisted colorscheme.
