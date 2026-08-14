@@ -10,6 +10,8 @@
  *   persists the chosen id through its own catalog route (POST) and
  *   re-applies it on load.
  */
+import { useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
@@ -47,6 +49,25 @@ const ROW_CSS = `
 .dshcs-dot{border:1px solid rgba(0,0,0,.18);border-radius:50%;display:inline-block;height:12px;width:12px}
 .dshcs-dot-default{background:linear-gradient(135deg,var(--dsw-static-neutral-bluish-50) 50%,var(--dsw-static-neutral-bluish-900) 50%)}
 .dshcs-error{color:var(--dsw-alias-state-error-primary);font-size:12px}
+.dshcs-title-row{align-items:center;display:flex;justify-content:space-between}
+.dshcs-btn{border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;line-height:18px;min-height:26px;padding:2px 10px}
+.dshcs-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshcs-btn:disabled{opacity:.5;cursor:default}
+.dshcs-btn-primary{border-color:var(--dsw-static-neutral-bluish-400);color:var(--dsw-alias-label-primary)}
+.dshcs-chip-wrap{align-items:center;display:inline-flex;gap:4px}
+.dshcs-del{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:10px;height:20px;line-height:1;padding:0 6px}
+.dshcs-del:hover{color:var(--dsw-alias-state-error-primary)}
+.dshcs-del-confirm{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary);font-size:10px}
+.dshcs-form{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;display:flex;flex-direction:column;gap:12px;margin-top:12px;padding:14px}
+.dshcs-form-title{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600}
+.dshcs-form-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.dshcs-field{display:flex;flex-direction:column;gap:4px}
+.dshcs-field-label{color:var(--dsw-alias-label-secondary);font-size:11px}
+.dshcs-input{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;min-height:26px;padding:2px 8px}
+.dshcs-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
+.dshcs-color{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;height:28px;padding:2px;width:100%;cursor:pointer}
+.dshcs-field-advanced{color:var(--dsw-alias-label-caption);font-size:11px;grid-column:1/-1;margin-top:4px}
+.dshcs-form-actions{display:flex;gap:8px;justify-content:flex-end}
 `
 if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css=${JSON.stringify(STYLE_TAG)}]`) === null) {
   const tag = document.createElement('style')
@@ -61,6 +82,27 @@ const zh = {
   'colorscheme.title': '配色方案',
   'colorscheme.default': '跟随外观',
   'colorscheme.loadError': '配色方案加载失败',
+  'colorscheme.add': '新增主题',
+  'colorscheme.addTitle': '新增自定义主题',
+  'colorscheme.field.id': '标识 (id)',
+  'colorscheme.field.name': '名称',
+  'colorscheme.field.scheme': '模式',
+  'colorscheme.field.scheme.dark': '深色',
+  'colorscheme.field.scheme.light': '浅色',
+  'colorscheme.field.bg': '背景',
+  'colorscheme.field.fg': '文字',
+  'colorscheme.field.accent': '强调色',
+  'colorscheme.field.advanced': '高级（可选）',
+  'colorscheme.field.elevated': '浮起表面',
+  'colorscheme.field.sidebar': '侧栏',
+  'colorscheme.field.success': '成功',
+  'colorscheme.field.error': '错误',
+  'colorscheme.field.warn': '警告',
+  'colorscheme.save': '保存',
+  'colorscheme.cancel': '取消',
+  'colorscheme.addError': '保存失败',
+  'colorscheme.delete': '删除',
+  'colorscheme.confirmDelete': '再次点击确认删除',
 } as const
 
 /** English dictionary, checked complete against the zh key set. */
@@ -68,6 +110,27 @@ const en: Record<keyof typeof zh, string> = {
   'colorscheme.title': 'Colorscheme',
   'colorscheme.default': 'Follow appearance',
   'colorscheme.loadError': 'Failed to load colorschemes',
+  'colorscheme.add': 'Add theme',
+  'colorscheme.addTitle': 'New custom theme',
+  'colorscheme.field.id': 'ID',
+  'colorscheme.field.name': 'Name',
+  'colorscheme.field.scheme': 'Scheme',
+  'colorscheme.field.scheme.dark': 'Dark',
+  'colorscheme.field.scheme.light': 'Light',
+  'colorscheme.field.bg': 'Background',
+  'colorscheme.field.fg': 'Foreground',
+  'colorscheme.field.accent': 'Accent',
+  'colorscheme.field.advanced': 'Advanced (optional)',
+  'colorscheme.field.elevated': 'Elevated surface',
+  'colorscheme.field.sidebar': 'Sidebar',
+  'colorscheme.field.success': 'Success',
+  'colorscheme.field.error': 'Error',
+  'colorscheme.field.warn': 'Warning',
+  'colorscheme.save': 'Save',
+  'colorscheme.cancel': 'Cancel',
+  'colorscheme.addError': 'Failed to save',
+  'colorscheme.delete': 'Delete',
+  'colorscheme.confirmDelete': 'Click again to confirm delete',
 }
 
 /** Row display model: id, name, and three sample colors (bg / fg / accent). */
@@ -82,18 +145,21 @@ interface RowState {
   selection: string
   revision: number
   themes: RowTheme[]
+  /** Theme ids that live in the themes directory and can be deleted in-app. */
+  deletable: string[]
   error: string
 }
 
 function createRowStore() {
   return defineStore({
-    init: (): RowState => ({ selection: DEFAULT_ID, revision: -1, themes: [], error: '' }),
+    init: (): RowState => ({ selection: DEFAULT_ID, revision: -1, themes: [], deletable: [], error: '' }),
     actions: {
-      sync: (d: RowState, selection: string, revision: number, themes: RowTheme[], error: string) => {
+      sync: (d: RowState, selection: string, revision: number, themes: RowTheme[], deletable: string[], error: string) => {
         if (revision <= d.revision) return
         d.selection = selection
         d.revision = revision
         d.themes = themes
+        d.deletable = deletable
         d.error = error
       },
     },
@@ -116,52 +182,210 @@ function toRowThemes(snapshot: ThemeSnapshot, names: Record<string, string>): Ro
     }))
 }
 
-/** The Colorscheme preference row (registered into settings.general.item). */
+/** The Colorscheme picker tab content (Settings → Plugins). */
 function ColorschemeRow(props: {
   t: (key: keyof typeof zh) => string
   useStore: <S>(selector: (s: RowState) => S) => S
   setTheme: (id: string) => void
+  reloadCatalog: () => void
 }) {
-  const { t, useStore, setTheme } = props
+  const { t, useStore, setTheme, reloadCatalog } = props
   const selection = useStore((s) => s.selection)
   const themes = useStore((s) => s.themes)
+  const deletable = useStore((s) => s.deletable)
   const error = useStore((s) => s.error)
 
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [fields, setFields] = useState({
+    id: '',
+    name: '',
+    colorScheme: 'dark' as 'light' | 'dark',
+    bg: '#1e1e2e',
+    fg: '#cdd6f4',
+    accent: '#cba6f7',
+    bgElevated: '#181825',
+    bgSidebar: '#181825',
+    success: '#a6e3a1',
+    error: '#f38ba8',
+    warn: '#f9e2af',
+  })
+  const setField = (key: keyof typeof fields) => (event: ChangeEvent<HTMLInputElement>) =>
+    setFields((f) => ({ ...f, [key]: event.target.value }))
+
+  const save = async () => {
+    const id = fields.id.trim().replace(/\s+/g, '-').toLowerCase()
+    if (!id) {
+      setFormError(t('colorscheme.field.id'))
+      return
+    }
+    setSaving(true)
+    setFormError('')
+    try {
+      const res = await fetch(CATALOG_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add-theme',
+          theme: {
+            id,
+            name: fields.name.trim() || id,
+            colorScheme: fields.colorScheme,
+            roles: {
+              bg: fields.bg,
+              fg: fields.fg,
+              accent: fields.accent,
+              bgElevated: fields.bgElevated,
+              bgSidebar: fields.bgSidebar,
+              success: fields.success,
+              error: fields.error,
+              warn: fields.warn,
+            },
+          },
+        }),
+      })
+      const result = (await res.json().catch(() => ({ ok: false, error: 'invalid response' }))) as { ok: boolean; error?: string }
+      if (result.ok) {
+        setShowForm(false)
+        setFields((f) => ({ ...f, id: '', name: '' }))
+        reloadCatalog()
+        setTheme(id)
+      } else {
+        setFormError(result.error ?? t('colorscheme.addError'))
+      }
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : t('colorscheme.addError'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (id: string) => {
+    if (confirmDelete !== id) {
+      setConfirmDelete(id)
+      setTimeout(() => setConfirmDelete((c) => (c === id ? null : c)), 2500)
+      return
+    }
+    setConfirmDelete(null)
+    try {
+      const res = await fetch(CATALOG_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'remove-theme', id }),
+      })
+      const result = (await res.json().catch(() => ({ ok: false, error: 'invalid response' }))) as { ok: boolean; error?: string }
+      if (!result.ok) setFormError(result.error ?? t('colorscheme.addError'))
+      reloadCatalog()
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : t('colorscheme.addError'))
+    }
+  }
+
   const chips = [
-    {
-      id: DEFAULT_ID,
-      label: t('colorscheme.default'),
-      samples: [],
-    },
+    { id: DEFAULT_ID, label: t('colorscheme.default'), samples: [] as string[] },
     ...themes.map((th) => ({ id: th.id, label: th.name, samples: th.samples })),
   ]
 
+  const colorField = (label: string, key: keyof typeof fields) => (
+    <label className="dshcs-field">
+      <span className="dshcs-field-label">{label}</span>
+      <input type="color" className="dshcs-color" value={fields[key] as string} onChange={setField(key)} />
+    </label>
+  )
+
   return (
     <div className="dshcs-row">
-      <div className="dshcs-title">{t('colorscheme.title')}</div>
+      <div className="dshcs-title-row">
+        <div className="dshcs-title">{t('colorscheme.title')}</div>
+        <button
+          type="button"
+          className="dshcs-btn"
+          onClick={() => {
+            setShowForm((v) => !v)
+            setFormError('')
+          }}
+        >
+          {t('colorscheme.add')}
+        </button>
+      </div>
       {error ? <div className="dshcs-error">{error}</div> : null}
       <div className="dshcs-grid">
-        {chips.map((chip) => (
-          <button
-            key={chip.id}
-            type="button"
-            className="dshcs-chip"
-            aria-pressed={selection === chip.id}
-            onClick={() => setTheme(chip.id)}
-          >
-            {chip.samples.length === 3 ? (
-              <span className="dshcs-dots" aria-hidden="true">
-                {chip.samples.map((c, i) => (
-                  <span key={i} className="dshcs-dot" style={{ backgroundColor: c }} />
-                ))}
-              </span>
-            ) : (
-              <span className="dshcs-dot dshcs-dot-default" aria-hidden="true" />
-            )}
-            {chip.label}
-          </button>
-        ))}
+        {chips.map((chip) => {
+          const isDeletable = deletable.includes(chip.id)
+          return (
+            <span key={chip.id} className="dshcs-chip-wrap">
+              <button type="button" className="dshcs-chip" aria-pressed={selection === chip.id} onClick={() => setTheme(chip.id)}>
+                {chip.samples.length === 3 ? (
+                  <span className="dshcs-dots" aria-hidden="true">
+                    {chip.samples.map((c, i) => (
+                      <span key={i} className="dshcs-dot" style={{ backgroundColor: c }} />
+                    ))}
+                  </span>
+                ) : (
+                  <span className="dshcs-dot dshcs-dot-default" aria-hidden="true" />
+                )}
+                {chip.label}
+              </button>
+              {isDeletable ? (
+                <button
+                  type="button"
+                  className={`dshcs-del${confirmDelete === chip.id ? ' dshcs-del-confirm' : ''}`}
+                  title={t('colorscheme.delete')}
+                  onClick={() => void remove(chip.id)}
+                >
+                  {confirmDelete === chip.id ? t('colorscheme.confirmDelete') : '✕'}
+                </button>
+              ) : null}
+            </span>
+          )
+        })}
       </div>
+      {showForm ? (
+        <div className="dshcs-form">
+          <div className="dshcs-form-title">{t('colorscheme.addTitle')}</div>
+          <div className="dshcs-form-grid">
+            <label className="dshcs-field">
+              <span className="dshcs-field-label">{t('colorscheme.field.id')}</span>
+              <input className="dshcs-input" value={fields.id} onChange={setField('id')} placeholder="my-theme" />
+            </label>
+            <label className="dshcs-field">
+              <span className="dshcs-field-label">{t('colorscheme.field.name')}</span>
+              <input className="dshcs-input" value={fields.name} onChange={setField('name')} placeholder="My Theme" />
+            </label>
+            <label className="dshcs-field">
+              <span className="dshcs-field-label">{t('colorscheme.field.scheme')}</span>
+              <select
+                className="dshcs-input"
+                value={fields.colorScheme}
+                onChange={(e) => setFields((f) => ({ ...f, colorScheme: e.target.value as 'light' | 'dark' }))}
+              >
+                <option value="dark">{t('colorscheme.field.scheme.dark')}</option>
+                <option value="light">{t('colorscheme.field.scheme.light')}</option>
+              </select>
+            </label>
+            {colorField(t('colorscheme.field.bg'), 'bg')}
+            {colorField(t('colorscheme.field.fg'), 'fg')}
+            {colorField(t('colorscheme.field.accent'), 'accent')}
+            <div className="dshcs-field-advanced">{t('colorscheme.field.advanced')}</div>
+            {colorField(t('colorscheme.field.elevated'), 'bgElevated')}
+            {colorField(t('colorscheme.field.sidebar'), 'bgSidebar')}
+            {colorField(t('colorscheme.field.success'), 'success')}
+            {colorField(t('colorscheme.field.error'), 'error')}
+            {colorField(t('colorscheme.field.warn'), 'warn')}
+          </div>
+          {formError ? <div className="dshcs-error">{formError}</div> : null}
+          <div className="dshcs-form-actions">
+            <button type="button" className="dshcs-btn dshcs-btn-primary" disabled={saving} onClick={() => void save()}>
+              {t('colorscheme.save')}
+            </button>
+            <button type="button" className="dshcs-btn" disabled={saving} onClick={() => setShowForm(false)}>
+              {t('colorscheme.cancel')}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -185,10 +409,12 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), 'colorscheme: locale dictionary')
 
   const store = createRowStore()
-  let bound: { sync: (selection: string, revision: number, themes: RowTheme[], error: string) => void } | undefined
+  let bound: { sync: (selection: string, revision: number, themes: RowTheme[], deletable: string[], error: string) => void } | undefined
   /** Persisted/desired colorscheme id ('' = follow the Appearance preference). */
   let selection = DEFAULT_ID
   let revision = -1
+  /** Theme ids from the themes directory (deletable in-app). */
+  let deletableIds: string[] = []
 
   /**
    * Presenter mirror. The official ui-layout presenter applies the resolved
@@ -222,7 +448,7 @@ export function apply(ctx: ClientContext): void {
 
   const publishRow = (error = '') => {
     if (!bound) return
-    bound.sync(activeSelection(), revision, toRowThemes(theme.getTheme(), nameById), error)
+    bound.sync(activeSelection(), revision, toRowThemes(theme.getTheme(), nameById), deletableIds, error)
   }
 
   /** Persist the picker selection through the catalog route (server-side). */
@@ -294,7 +520,20 @@ export function apply(ctx: ClientContext): void {
     }
   }
 
+  /** Drop all theme registrations (used before re-registering after an edit). */
+  const disposeThemes = () => {
+    for (const dispose of disposers) {
+      try {
+        dispose()
+      } catch {
+        // already gone
+      }
+    }
+    disposers.length = 0
+  }
+
   const registerCatalog = (catalog: ThemeCatalog) => {
+    disposeThemes()
     for (const entry of [...catalog.presets, ...catalog.userThemes, ...catalog.settingsThemes]) {
       nameById[entry.id] = entry.name
       try {
@@ -308,6 +547,7 @@ export function apply(ctx: ClientContext): void {
         console.warn('[colorscheme] failed to register theme', entry.id, e)
       }
     }
+    deletableIds = catalog.userThemes.map((t) => t.id)
     // Precedence: persisted selection (from the catalog) > config default > follow appearance.
     const saved = catalog.selection
     if (saved && theme.getTheme().themes.some((t) => t.id === saved)) {
@@ -327,6 +567,16 @@ export function apply(ctx: ClientContext): void {
     publishRow()
   }
 
+  /** Re-fetch the catalog and re-register (after adding/removing a user theme). */
+  const reloadCatalog = () => {
+    void loadCatalog()
+      .then(registerCatalog)
+      .catch((e: unknown) => {
+        console.warn('[colorscheme] catalog reload failed', e)
+        publishRow(typeof e === 'object' && e !== null && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+      })
+  }
+
   void loadCatalog()
     .then(registerCatalog)
     .catch((e: unknown) => {
@@ -338,14 +588,7 @@ export function apply(ctx: ClientContext): void {
   // (HMR / config edit).
   ctx.effect(
     () => () => {
-      for (const dispose of disposers) {
-        try {
-          dispose()
-        } catch {
-          // already gone
-        }
-      }
-      disposers.length = 0
+      disposeThemes()
       const body = document.body
       for (const name of appliedTokens) body.style.removeProperty(name)
       appliedTokens.length = 0
@@ -364,7 +607,7 @@ export function apply(ctx: ClientContext): void {
         label: () => ctx.locale.bind(LOCALE_NS)('colorscheme.title'),
         store,
         locale: LOCALE_NS,
-        inject: (actions: { sync: (selection: string, revision: number, themes: RowTheme[], error: string) => void }) => {
+        inject: (actions: { sync: (selection: string, revision: number, themes: RowTheme[], deletable: string[], error: string) => void }) => {
           bound = actions
           publishRow()
           return {
@@ -382,6 +625,7 @@ export function apply(ctx: ClientContext): void {
                 saveSelection(id)
               }
             },
+            reloadCatalog,
           }
         },
       },

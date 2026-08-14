@@ -9,7 +9,8 @@
 - 内置 8 个预设主题（Dracula、Nord、One Dark/Light、Tokyo Night、
   Catppuccin Mocha、VS Code Dark/Light），许可与署名见
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
-- 支持三种用户扩展方式（见下）
+- 支持三种用户扩展方式（见下），也可以在 **设置 → 插件 → 配色方案** 页签里
+  直接「新增主题」（填几个颜色即可，自动写入主题目录）或删除自定义主题
 
 ## 安装
 

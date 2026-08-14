@@ -18,7 +18,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { generateTokens, type ThemeRoles } from '../shared/generate.ts'
@@ -243,7 +243,64 @@ export function apply(ctx: Context, config: Config): void {
                 jsonResponse(res, 400, { ok: false, error: 'invalid JSON body' })
                 return
               }
-              const selection = isRecord(parsed) && typeof parsed.selection === 'string' ? parsed.selection : ''
+              const record = isRecord(parsed) ? parsed : {}
+              const action = typeof record.action === 'string' ? record.action : 'set-selection'
+
+              // Add a user theme: validate, then write <themesDir>/<id>.json.
+              if (action === 'add-theme') {
+                const catalog = buildCatalog(config, httpCtx)
+                try {
+                  const entry = normalizeThemeEntry(record.theme, 'new theme')
+                  const known = new Set([...catalog.presets, ...catalog.userThemes, ...catalog.settingsThemes].map((t) => t.id))
+                  if (known.has(entry.id)) {
+                    jsonResponse(res, 400, { ok: false, error: `theme id "${entry.id}" already exists` })
+                    return
+                  }
+                  // Store the raw user input (roles preferred) so it stays editable.
+                  const raw = isRecord(record.theme) ? record.theme : {}
+                  const stored = {
+                    id: entry.id,
+                    name: entry.name,
+                    colorScheme: entry.colorScheme,
+                    ...(isRecord(raw.roles) ? { roles: raw.roles } : { tokens: entry.tokens }),
+                  }
+                  writeFileSync(join(catalog.themesDir, `${entry.id}.json`), JSON.stringify(stored, null, 2), 'utf8')
+                  jsonResponse(res, 200, { ok: true, id: entry.id })
+                } catch (e) {
+                  jsonResponse(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) })
+                }
+                return
+              }
+
+              // Remove a user theme from the themes directory (never presets).
+              if (action === 'remove-theme') {
+                const id = typeof record.id === 'string' ? record.id.trim() : ''
+                if (!id || !/^[A-Za-z0-9._-]+$/.test(id)) {
+                  jsonResponse(res, 400, { ok: false, error: 'invalid theme id' })
+                  return
+                }
+                const catalog = buildCatalog(config, httpCtx)
+                if (catalog.presets.some((t) => t.id === id) || catalog.settingsThemes.some((t) => t.id === id)) {
+                  jsonResponse(res, 400, { ok: false, error: `"${id}" is not a themes-directory user theme` })
+                  return
+                }
+                const file = join(catalog.themesDir, `${id}.json`)
+                try {
+                  if (!existsSync(file)) {
+                    jsonResponse(res, 404, { ok: false, error: `theme file not found: ${id}` })
+                    return
+                  }
+                  rmSync(file, { force: true })
+                  if (readPersistedSelection(catalog.themesDir) === id) writePersistedSelection(catalog.themesDir, '')
+                  jsonResponse(res, 200, { ok: true, id })
+                } catch (e) {
+                  jsonResponse(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) })
+                }
+                return
+              }
+
+              // Default: persist the picker selection.
+              const selection = typeof record.selection === 'string' ? record.selection : ''
               const catalog = buildCatalog(config, httpCtx)
               const known = new Set([...catalog.presets, ...catalog.userThemes, ...catalog.settingsThemes].map((t) => t.id))
               if (selection !== '' && !known.has(selection)) {

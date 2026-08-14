@@ -10,7 +10,9 @@ is restored after a refresh.
 - 8 built-in preset themes (Dracula, Nord, One Dark/Light, Tokyo Night,
   Catppuccin Mocha, VS Code Dark/Light); licenses and attribution in
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
-- Three ways to extend (below)
+- Three ways to extend (below) — or add a theme directly in
+  **Settings → Plugins → Colorscheme** with the "Add theme" form (it writes
+  into the themes directory), and delete custom themes in-app
 
 ## Installation
 
