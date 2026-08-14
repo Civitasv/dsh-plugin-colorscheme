@@ -11,7 +11,7 @@ is restored after a refresh.
   Catppuccin Mocha, VS Code Dark/Light); licenses and attribution in
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 - Three ways to extend (below) — or add a theme with the "Add theme" form, delete custom themes in-app, and edit
-the themes directory / default theme live — all inside the **Colorscheme**
+the themes directory live — all inside the **Colorscheme**
 card under Settings → Plugins → Plugin configuration
 
 ## Installation

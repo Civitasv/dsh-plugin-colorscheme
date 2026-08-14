@@ -75,20 +75,19 @@ function configOverridePath(): string {
   return join(home, CONFIG_OVERRIDE_FILE)
 }
 
-function readConfigOverride(): { themesDir?: string; defaultTheme?: string } {
+function readConfigOverride(): { themesDir?: string } {
   try {
     const raw = JSON.parse(readFileSync(configOverridePath(), 'utf8'))
     if (!isRecord(raw)) return {}
     return {
       themesDir: typeof raw.themesDir === 'string' ? raw.themesDir : undefined,
-      defaultTheme: typeof raw.defaultTheme === 'string' ? raw.defaultTheme : undefined,
     }
   } catch {
     return {}
   }
 }
 
-function writeConfigOverride(override: { themesDir?: string; defaultTheme?: string }): void {
+function writeConfigOverride(override: { themesDir?: string }): void {
   writeFileSync(configOverridePath(), JSON.stringify(override, null, 2), 'utf8')
 }
 
@@ -180,7 +179,6 @@ function writePersistedSelection(themesDir: string, selection: string): void {
 /** Build the catalog document (honoring live config overrides). */
 function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
   const override = readConfigOverride()
-  const effectiveDefaultTheme = override.defaultTheme ?? config.defaultTheme
   const themesDir = resolveThemesDir(override.themesDir ?? config.themesDir)
   try {
     if (!existsSync(themesDir)) mkdirSync(themesDir, { recursive: true })
@@ -228,7 +226,7 @@ function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
     })),
     userThemes: userThemes.map((u) => dedupe(u, 'user theme')).filter((u): u is ThemeEntry => u !== null),
     settingsThemes: settingsThemes.map((u) => dedupe(u, 'settings theme')).filter((u): u is ThemeEntry => u !== null),
-    defaultTheme: effectiveDefaultTheme,
+    defaultTheme: config.defaultTheme,
     errors,
   }
 }
@@ -276,9 +274,8 @@ export function apply(ctx: Context, config: Config): void {
               // Save live config overrides (the plugin config card); {} clears them.
               if (action === 'set-config') {
                 const cfg = isRecord(record.config) ? record.config : {}
-                const next: { themesDir?: string; defaultTheme?: string } = {}
+                const next: { themesDir?: string } = {}
                 if (typeof cfg.themesDir === 'string') next.themesDir = cfg.themesDir
-                if (typeof cfg.defaultTheme === 'string') next.defaultTheme = cfg.defaultTheme
                 try {
                   writeConfigOverride(next)
                   jsonResponse(res, 200, { ok: true })

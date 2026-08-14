@@ -120,8 +120,6 @@ const zh = {
   'config.title': '配置',
   'config.themesDir': '主题目录',
   'config.themesDirHint': '用户主题 JSON 文件的目录（留空 = 默认 ~/.dsh/themes）',
-  'config.defaultTheme': '默认主题',
-  'config.defaultThemeHint': '未手动选择时应用的主题 id（留空 = 跟随外观）',
   'config.save': '保存',
   'config.discard': '恢复默认',
   'config.unsaved': '未保存',
@@ -157,8 +155,6 @@ const en: Record<keyof typeof zh, string> = {
   'config.title': 'Configuration',
   'config.themesDir': 'Themes directory',
   'config.themesDirHint': 'Directory for user theme JSON files (empty = default ~/.dsh/themes)',
-  'config.defaultTheme': 'Default theme',
-  'config.defaultThemeHint': 'Theme id applied when none is chosen (empty = follow appearance)',
   'config.save': 'Save',
   'config.discard': 'Reset',
   'config.unsaved': 'Unsaved',
@@ -431,8 +427,8 @@ function ColorschemeConfigCard(props: {
 }) {
   const { t, useStore, setTheme, reloadCatalog } = props
   const [open, setOpen] = useState(false)
-  const [config, setConfig] = useState<{ themesDir: string; defaultTheme: string } | null>(null)
-  const [draft, setDraft] = useState({ themesDir: '', defaultTheme: '' })
+  const [config, setConfig] = useState<{ themesDir: string } | null>(null)
+  const [draft, setDraft] = useState({ themesDir: '' })
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -440,7 +436,7 @@ function ColorschemeConfigCard(props: {
     try {
       const res = await fetch(CATALOG_URL, { headers: { accept: 'application/json' } })
       const catalog = (await res.json()) as ThemeCatalog
-      const next = { themesDir: catalog.themesDir, defaultTheme: catalog.defaultTheme }
+      const next = { themesDir: catalog.themesDir }
       setConfig(next)
       setDraft(next)
     } catch {
@@ -452,7 +448,7 @@ function ColorschemeConfigCard(props: {
     if (open) void load()
   }, [open])
 
-  const dirty = config !== null && (draft.themesDir !== config.themesDir || draft.defaultTheme !== config.defaultTheme)
+  const dirty = config !== null && draft.themesDir !== config.themesDir
 
   const save = async (clear: boolean) => {
     setSaving(true)
@@ -494,16 +490,6 @@ function ColorschemeConfigCard(props: {
               onChange={(e) => setDraft((d) => ({ ...d, themesDir: e.target.value }))}
             />
             <span className="dshcfg-hint">{t('config.themesDirHint')}</span>
-          </label>
-          <label className="dshcfg-field">
-            <span className="dshcfg-label">{t('config.defaultTheme')}</span>
-            <input
-              className="dshcs-input"
-              value={draft.defaultTheme}
-              placeholder="dracula"
-              onChange={(e) => setDraft((d) => ({ ...d, defaultTheme: e.target.value }))}
-            />
-            <span className="dshcfg-hint">{t('config.defaultThemeHint')}</span>
           </label>
           {failed ? <p className="dshcs-error" role="status">{t('config.saveFailed')}</p> : null}
           <div className="dshcfg-actions">

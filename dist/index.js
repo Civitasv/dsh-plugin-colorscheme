@@ -432,8 +432,7 @@ function readConfigOverride() {
     const raw = JSON.parse(readFileSync(configOverridePath(), "utf8"));
     if (!isRecord(raw)) return {};
     return {
-      themesDir: typeof raw.themesDir === "string" ? raw.themesDir : void 0,
-      defaultTheme: typeof raw.defaultTheme === "string" ? raw.defaultTheme : void 0
+      themesDir: typeof raw.themesDir === "string" ? raw.themesDir : void 0
     };
   } catch {
     return {};
@@ -515,7 +514,6 @@ function writePersistedSelection(themesDir, selection) {
 }
 function buildCatalog(config, ctx) {
   const override = readConfigOverride();
-  const effectiveDefaultTheme = override.defaultTheme ?? config.defaultTheme;
   const themesDir = resolveThemesDir(override.themesDir ?? config.themesDir);
   try {
     if (!existsSync(themesDir)) mkdirSync(themesDir, { recursive: true });
@@ -558,7 +556,7 @@ function buildCatalog(config, ctx) {
     })),
     userThemes: userThemes.map((u) => dedupe(u, "user theme")).filter((u) => u !== null),
     settingsThemes: settingsThemes.map((u) => dedupe(u, "settings theme")).filter((u) => u !== null),
-    defaultTheme: effectiveDefaultTheme,
+    defaultTheme: config.defaultTheme,
     errors
   };
 }
@@ -601,7 +599,6 @@ function apply(ctx, config) {
               const cfg = isRecord(record.config) ? record.config : {};
               const next = {};
               if (typeof cfg.themesDir === "string") next.themesDir = cfg.themesDir;
-              if (typeof cfg.defaultTheme === "string") next.defaultTheme = cfg.defaultTheme;
               try {
                 writeConfigOverride(next);
                 jsonResponse(res, 200, { ok: true });
