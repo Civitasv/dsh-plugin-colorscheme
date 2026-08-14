@@ -353,13 +353,15 @@ export function apply(ctx: ClientContext): void {
     'colorscheme: theme registrations',
   )
 
-  // The preference row, placed after the built-in Appearance row (order 10).
-  ctx.slots.inject('settings.general.item', () =>
+  // The Colorscheme picker lives in its own tab under 设置 → 插件 (not the
+  // General section, which only owns the built-in Appearance row).
+  ctx.slots.inject('settings.plugins.tab', () =>
     ctx.slots.register(
       {
-        name: 'settings.general.item',
+        name: 'settings.plugins.tab',
         id: 'colorscheme',
-        order: 20,
+        order: 10,
+        label: () => ctx.locale.bind(LOCALE_NS)('colorscheme.title'),
         store,
         locale: LOCALE_NS,
         inject: (actions: { sync: (selection: string, revision: number, themes: RowTheme[], error: string) => void }) => {
