@@ -76,6 +76,7 @@ const ROW_CSS = `
 .dshcfg-desc{color:var(--dsw-alias-label-tertiary);flex:1;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshcfg-pending{background:rgba(46,160,67,.16);border-radius:999px;color:var(--dsw-alias-state-success-primary);flex:none;font-size:11px;padding:1px 8px}
 .dshcfg-caret{color:var(--dsw-alias-label-tertiary);flex:none;font-size:10px}
+.dshcfg-divider{border-top:1px solid var(--dsw-alias-border-l1);margin:2px 0}
 .dshcfg-body{display:flex;flex-direction:column;gap:12px;padding:4px 12px 12px}
 .dshcfg-field{display:flex;flex-direction:column;gap:4px}
 .dshcfg-label{color:var(--dsw-alias-label-secondary);font-size:12px}
@@ -213,8 +214,8 @@ function toRowThemes(snapshot: ThemeSnapshot, names: Record<string, string>): Ro
     }))
 }
 
-/** The Colorscheme picker tab content (Settings → Plugins). */
-function ColorschemeRow(props: {
+/** The Colorscheme picker (chips + add/delete), rendered inside the config card. */
+function ColorschemePicker(props: {
   t: (key: keyof typeof zh) => string
   useStore: <S>(selector: (s: RowState) => S) => S
   setTheme: (id: string) => void
@@ -422,7 +423,13 @@ function ColorschemeRow(props: {
 }
 
 /** Config card for the Plugins configuration tab (Settings → Plugins → 可配置). */
-function ColorschemeConfigCard({ t }: { t: (key: keyof typeof zh) => string }) {
+function ColorschemeConfigCard(props: {
+  t: (key: keyof typeof zh) => string
+  useStore: <S>(selector: (s: RowState) => S) => S
+  setTheme: (id: string) => void
+  reloadCatalog: () => void
+}) {
+  const { t, useStore, setTheme, reloadCatalog } = props
   const [open, setOpen] = useState(false)
   const [config, setConfig] = useState<{ themesDir: string; defaultTheme: string } | null>(null)
   const [draft, setDraft] = useState({ themesDir: '', defaultTheme: '' })
@@ -476,6 +483,8 @@ function ColorschemeConfigCard({ t }: { t: (key: keyof typeof zh) => string }) {
       </button>
       {open ? (
         <div className="dshcfg-body">
+          <ColorschemePicker t={t} useStore={useStore} setTheme={setTheme} reloadCatalog={reloadCatalog} />
+          <div className="dshcfg-divider" />
           <label className="dshcfg-field">
             <span className="dshcfg-label">{t('config.themesDir')}</span>
             <input
@@ -717,15 +726,14 @@ export function apply(ctx: ClientContext): void {
     'colorscheme: theme registrations',
   )
 
-  // The Colorscheme picker lives in its own tab under 设置 → 插件 (not the
-  // General section, which only owns the built-in Appearance row).
-  ctx.slots.inject('settings.plugins.tab', () =>
+  // The whole Colorscheme configuration lives in one card inside
+  // 设置 → 插件 → 插件配置 (settings.plugin.item): picker + add/delete + config.
+  ctx.slots.inject('settings.plugin.item', () =>
     ctx.slots.register(
       {
-        name: 'settings.plugins.tab',
-        id: 'colorscheme',
-        order: 10,
-        label: () => ctx.locale.bind(LOCALE_NS)('colorscheme.title'),
+        name: 'settings.plugin.item',
+        id: 'colorscheme-config',
+        order: 20,
         store,
         locale: LOCALE_NS,
         inject: (actions: { sync: (selection: string, revision: number, themes: RowTheme[], deletable: string[], error: string) => void }) => {
@@ -749,19 +757,6 @@ export function apply(ctx: ClientContext): void {
             reloadCatalog,
           }
         },
-      },
-      ColorschemeRow,
-    ),
-  )
-
-  // The config card inside 设置 → 插件 → 插件配置 (settings.plugin.item).
-  ctx.slots.inject('settings.plugin.item', () =>
-    ctx.slots.register(
-      {
-        name: 'settings.plugin.item',
-        id: 'colorscheme-config',
-        order: 20,
-        locale: LOCALE_NS,
       },
       ColorschemeConfigCard,
     ),

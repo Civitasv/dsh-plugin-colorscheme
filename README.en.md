@@ -4,17 +4,15 @@
 
 Colorschemes for DeepSeek Harness: apply popular MIT-licensed open-source
 theme palettes to the DSH interface. Once loaded, switch themes from
-**Settings → Plugins → Colorscheme** with one click; the selection persists and
+**Settings → Plugins → Plugin configuration → Colorscheme** card, with one click; the selection persists and
 is restored after a refresh.
 
 - 8 built-in preset themes (Dracula, Nord, One Dark/Light, Tokyo Night,
   Catppuccin Mocha, VS Code Dark/Light); licenses and attribution in
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
-- Three ways to extend (below) — or add a theme directly in
-  **Settings → Plugins → Colorscheme** with the "Add theme" form (it writes
-  into the themes directory), delete custom themes in-app, and edit the
-  themes directory / default theme live from the config card under
-  **Settings → Plugins → Plugin configuration**
+- Three ways to extend (below) — or add a theme with the "Add theme" form, delete custom themes in-app, and edit
+the themes directory / default theme live — all inside the **Colorscheme**
+card under Settings → Plugins → Plugin configuration
 
 ## Installation
 
@@ -45,7 +43,7 @@ changed the source.
    ```
 
 4. **Restart `dsh web`**, then switch themes from
-   **Settings → Plugins → Colorscheme**.
+   **Settings → Plugins → Plugin configuration → Colorscheme**.
 
 > **If you have pnpm installed**, you can replace step 2 with `dsh plugin`:
 > it forwards its arguments verbatim to pnpm, running inside the profile
@@ -61,8 +59,8 @@ changed the source.
 
 ## Preview
 
-The **Colorscheme** picker in its own tab under Settings → Plugins (click
-to switch, persisted automatically):
+The **Colorscheme** card under Settings → Plugins → Plugin configuration
+(click to switch, persisted automatically):
 
 ![Settings](docs/screenshots/settings.png)
 
