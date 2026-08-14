@@ -422,6 +422,26 @@ var SettingsSchema = z.object({
   catalogPath: z.string().default("/colorscheme/themes.json")
 });
 var SELECTION_FILE = ".colorscheme.json";
+var CONFIG_OVERRIDE_FILE = "dsh-plugin-colorscheme-config.json";
+function configOverridePath() {
+  const home = process.env.DSH_HOME || join(homedir(), ".dsh");
+  return join(home, CONFIG_OVERRIDE_FILE);
+}
+function readConfigOverride() {
+  try {
+    const raw = JSON.parse(readFileSync(configOverridePath(), "utf8"));
+    if (!isRecord(raw)) return {};
+    return {
+      themesDir: typeof raw.themesDir === "string" ? raw.themesDir : void 0,
+      defaultTheme: typeof raw.defaultTheme === "string" ? raw.defaultTheme : void 0
+    };
+  } catch {
+    return {};
+  }
+}
+function writeConfigOverride(override) {
+  writeFileSync(configOverridePath(), JSON.stringify(override, null, 2), "utf8");
+}
 function resolveThemesDir(configDir) {
   if (configDir) return isAbsolute(configDir) ? configDir : resolve(process.cwd(), configDir);
   const home = process.env.DSH_HOME || join(homedir(), ".dsh");
@@ -494,7 +514,9 @@ function writePersistedSelection(themesDir, selection) {
   renameSync(tmp, file);
 }
 function buildCatalog(config, ctx) {
-  const themesDir = resolveThemesDir(config.themesDir);
+  const override = readConfigOverride();
+  const effectiveDefaultTheme = override.defaultTheme ?? config.defaultTheme;
+  const themesDir = resolveThemesDir(override.themesDir ?? config.themesDir);
   try {
     if (!existsSync(themesDir)) mkdirSync(themesDir, { recursive: true });
   } catch {
@@ -536,7 +558,7 @@ function buildCatalog(config, ctx) {
     })),
     userThemes: userThemes.map((u) => dedupe(u, "user theme")).filter((u) => u !== null),
     settingsThemes: settingsThemes.map((u) => dedupe(u, "settings theme")).filter((u) => u !== null),
-    defaultTheme: config.defaultTheme,
+    defaultTheme: effectiveDefaultTheme,
     errors
   };
 }
@@ -575,6 +597,19 @@ function apply(ctx, config) {
             }
             const record = isRecord(parsed) ? parsed : {};
             const action = typeof record.action === "string" ? record.action : "set-selection";
+            if (action === "set-config") {
+              const cfg = isRecord(record.config) ? record.config : {};
+              const next = {};
+              if (typeof cfg.themesDir === "string") next.themesDir = cfg.themesDir;
+              if (typeof cfg.defaultTheme === "string") next.defaultTheme = cfg.defaultTheme;
+              try {
+                writeConfigOverride(next);
+                jsonResponse(res, 200, { ok: true });
+              } catch (e) {
+                jsonResponse(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) });
+              }
+              return;
+            }
             if (action === "add-theme") {
               const catalog2 = buildCatalog(config, httpCtx);
               try {

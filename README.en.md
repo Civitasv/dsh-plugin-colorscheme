@@ -12,7 +12,9 @@ is restored after a refresh.
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 - Three ways to extend (below) — or add a theme directly in
   **Settings → Plugins → Colorscheme** with the "Add theme" form (it writes
-  into the themes directory), and delete custom themes in-app
+  into the themes directory), delete custom themes in-app, and edit the
+  themes directory / default theme live from the config card under
+  **Settings → Plugins → Plugin configuration**
 
 ## Installation
 

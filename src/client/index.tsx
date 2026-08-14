@@ -10,7 +10,7 @@
  *   persists the chosen id through its own catalog route (POST) and
  *   re-applies it on load.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -18,6 +18,7 @@ import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 // Type-only imports that pull the context augmentations (settingsScope,
 // locale, the settings.general.item slot contract) into this program.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { ThemeCatalog } from '../shared/types.ts'
 
@@ -68,6 +69,18 @@ const ROW_CSS = `
 .dshcs-color{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;height:28px;padding:2px;width:100%;cursor:pointer}
 .dshcs-field-advanced{color:var(--dsw-alias-label-caption);font-size:11px;grid-column:1/-1;margin-top:4px}
 .dshcs-form-actions{display:flex;gap:8px;justify-content:flex-end}
+.dshcfg-card{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;list-style:none;margin-bottom:10px;overflow:hidden}
+.dshcfg-head{align-items:center;background:transparent;border:0;color:var(--dsw-alias-label-primary);cursor:pointer;display:flex;font:inherit;gap:8px;padding:10px 12px;text-align:left;width:100%}
+.dshcfg-head:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshcfg-name{font-size:13px;font-weight:600}
+.dshcfg-desc{color:var(--dsw-alias-label-tertiary);flex:1;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshcfg-pending{background:rgba(46,160,67,.16);border-radius:999px;color:var(--dsw-alias-state-success-primary);flex:none;font-size:11px;padding:1px 8px}
+.dshcfg-caret{color:var(--dsw-alias-label-tertiary);flex:none;font-size:10px}
+.dshcfg-body{display:flex;flex-direction:column;gap:12px;padding:4px 12px 12px}
+.dshcfg-field{display:flex;flex-direction:column;gap:4px}
+.dshcfg-label{color:var(--dsw-alias-label-secondary);font-size:12px}
+.dshcfg-hint{color:var(--dsw-alias-label-caption);font-size:11px}
+.dshcfg-actions{display:flex;gap:8px;justify-content:flex-end}
 `
 if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css=${JSON.stringify(STYLE_TAG)}]`) === null) {
   const tag = document.createElement('style')
@@ -103,6 +116,15 @@ const zh = {
   'colorscheme.addError': '保存失败',
   'colorscheme.delete': '删除',
   'colorscheme.confirmDelete': '再次点击确认删除',
+  'config.title': '配置',
+  'config.themesDir': '主题目录',
+  'config.themesDirHint': '用户主题 JSON 文件的目录（留空 = 默认 ~/.dsh/themes）',
+  'config.defaultTheme': '默认主题',
+  'config.defaultThemeHint': '未手动选择时应用的主题 id（留空 = 跟随外观）',
+  'config.save': '保存',
+  'config.discard': '恢复默认',
+  'config.unsaved': '未保存',
+  'config.saveFailed': '保存失败',
 } as const
 
 /** English dictionary, checked complete against the zh key set. */
@@ -131,6 +153,15 @@ const en: Record<keyof typeof zh, string> = {
   'colorscheme.addError': 'Failed to save',
   'colorscheme.delete': 'Delete',
   'colorscheme.confirmDelete': 'Click again to confirm delete',
+  'config.title': 'Configuration',
+  'config.themesDir': 'Themes directory',
+  'config.themesDirHint': 'Directory for user theme JSON files (empty = default ~/.dsh/themes)',
+  'config.defaultTheme': 'Default theme',
+  'config.defaultThemeHint': 'Theme id applied when none is chosen (empty = follow appearance)',
+  'config.save': 'Save',
+  'config.discard': 'Reset',
+  'config.unsaved': 'Unsaved',
+  'config.saveFailed': 'Save failed',
 }
 
 /** Row display model: id, name, and three sample colors (bg / fg / accent). */
@@ -390,6 +421,96 @@ function ColorschemeRow(props: {
   )
 }
 
+/** Config card for the Plugins configuration tab (Settings → Plugins → 可配置). */
+function ColorschemeConfigCard({ t }: { t: (key: keyof typeof zh) => string }) {
+  const [open, setOpen] = useState(false)
+  const [config, setConfig] = useState<{ themesDir: string; defaultTheme: string } | null>(null)
+  const [draft, setDraft] = useState({ themesDir: '', defaultTheme: '' })
+  const [saving, setSaving] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const load = async () => {
+    try {
+      const res = await fetch(CATALOG_URL, { headers: { accept: 'application/json' } })
+      const catalog = (await res.json()) as ThemeCatalog
+      const next = { themesDir: catalog.themesDir, defaultTheme: catalog.defaultTheme }
+      setConfig(next)
+      setDraft(next)
+    } catch {
+      // keep last known state
+    }
+  }
+
+  useEffect(() => {
+    if (open) void load()
+  }, [open])
+
+  const dirty = config !== null && (draft.themesDir !== config.themesDir || draft.defaultTheme !== config.defaultTheme)
+
+  const save = async (clear: boolean) => {
+    setSaving(true)
+    setFailed(false)
+    try {
+      const res = await fetch(CATALOG_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(clear ? { action: 'set-config', config: {} } : { action: 'set-config', config: draft }),
+      })
+      const result = (await res.json().catch(() => ({ ok: false }))) as { ok: boolean }
+      if (!result.ok) setFailed(true)
+      await load()
+    } catch {
+      setFailed(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <li className="dshcfg-card">
+      <button type="button" className="dshcfg-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="dshcfg-name">{t('colorscheme.title')}</span>
+        <span className="dshcfg-desc">{t('config.title')}</span>
+        {dirty ? <span className="dshcfg-pending">{t('config.unsaved')}</span> : null}
+        <span className="dshcfg-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open ? (
+        <div className="dshcfg-body">
+          <label className="dshcfg-field">
+            <span className="dshcfg-label">{t('config.themesDir')}</span>
+            <input
+              className="dshcs-input"
+              value={draft.themesDir}
+              placeholder="~/.dsh/themes"
+              onChange={(e) => setDraft((d) => ({ ...d, themesDir: e.target.value }))}
+            />
+            <span className="dshcfg-hint">{t('config.themesDirHint')}</span>
+          </label>
+          <label className="dshcfg-field">
+            <span className="dshcfg-label">{t('config.defaultTheme')}</span>
+            <input
+              className="dshcs-input"
+              value={draft.defaultTheme}
+              placeholder="dracula"
+              onChange={(e) => setDraft((d) => ({ ...d, defaultTheme: e.target.value }))}
+            />
+            <span className="dshcfg-hint">{t('config.defaultThemeHint')}</span>
+          </label>
+          {failed ? <p className="dshcs-error" role="status">{t('config.saveFailed')}</p> : null}
+          <div className="dshcfg-actions">
+            <button type="button" className="dshcs-btn" disabled={!dirty || saving} onClick={() => void save(true)}>
+              {t('config.discard')}
+            </button>
+            <button type="button" className="dshcs-btn dshcs-btn-primary" disabled={!dirty || saving} onClick={() => void save(false)}>
+              {t('config.save')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
 /** Fetch the server-side theme catalog once. */
 async function loadCatalog(): Promise<ThemeCatalog> {
   const res = await fetch(CATALOG_URL, { headers: { accept: 'application/json' } })
@@ -630,6 +751,19 @@ export function apply(ctx: ClientContext): void {
         },
       },
       ColorschemeRow,
+    ),
+  )
+
+  // The config card inside 设置 → 插件 → 插件配置 (settings.plugin.item).
+  ctx.slots.inject('settings.plugin.item', () =>
+    ctx.slots.register(
+      {
+        name: 'settings.plugin.item',
+        id: 'colorscheme-config',
+        order: 20,
+        locale: LOCALE_NS,
+      },
+      ColorschemeConfigCard,
     ),
   )
 }

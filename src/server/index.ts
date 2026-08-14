@@ -67,6 +67,31 @@ const SettingsSchema = z.object({
 /** State file holding the picker selection, inside the themes directory. */
 const SELECTION_FILE = '.colorscheme.json'
 
+/** User-editable config overrides (live, via the plugin config card). */
+const CONFIG_OVERRIDE_FILE = 'dsh-plugin-colorscheme-config.json'
+
+function configOverridePath(): string {
+  const home = process.env.DSH_HOME || join(homedir(), '.dsh')
+  return join(home, CONFIG_OVERRIDE_FILE)
+}
+
+function readConfigOverride(): { themesDir?: string; defaultTheme?: string } {
+  try {
+    const raw = JSON.parse(readFileSync(configOverridePath(), 'utf8'))
+    if (!isRecord(raw)) return {}
+    return {
+      themesDir: typeof raw.themesDir === 'string' ? raw.themesDir : undefined,
+      defaultTheme: typeof raw.defaultTheme === 'string' ? raw.defaultTheme : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+function writeConfigOverride(override: { themesDir?: string; defaultTheme?: string }): void {
+  writeFileSync(configOverridePath(), JSON.stringify(override, null, 2), 'utf8')
+}
+
 function resolveThemesDir(configDir: string): string {
   if (configDir) return isAbsolute(configDir) ? configDir : resolve(process.cwd(), configDir)
   const home = process.env.DSH_HOME || join(homedir(), '.dsh')
@@ -152,9 +177,11 @@ function writePersistedSelection(themesDir: string, selection: string): void {
   renameSync(tmp, file)
 }
 
-/** Build the catalog document. */
+/** Build the catalog document (honoring live config overrides). */
 function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
-  const themesDir = resolveThemesDir(config.themesDir)
+  const override = readConfigOverride()
+  const effectiveDefaultTheme = override.defaultTheme ?? config.defaultTheme
+  const themesDir = resolveThemesDir(override.themesDir ?? config.themesDir)
   try {
     if (!existsSync(themesDir)) mkdirSync(themesDir, { recursive: true })
   } catch {
@@ -201,7 +228,7 @@ function buildCatalog(config: Config, ctx: Context): ThemeCatalog {
     })),
     userThemes: userThemes.map((u) => dedupe(u, 'user theme')).filter((u): u is ThemeEntry => u !== null),
     settingsThemes: settingsThemes.map((u) => dedupe(u, 'settings theme')).filter((u): u is ThemeEntry => u !== null),
-    defaultTheme: config.defaultTheme,
+    defaultTheme: effectiveDefaultTheme,
     errors,
   }
 }
@@ -245,6 +272,21 @@ export function apply(ctx: Context, config: Config): void {
               }
               const record = isRecord(parsed) ? parsed : {}
               const action = typeof record.action === 'string' ? record.action : 'set-selection'
+
+              // Save live config overrides (the plugin config card); {} clears them.
+              if (action === 'set-config') {
+                const cfg = isRecord(record.config) ? record.config : {}
+                const next: { themesDir?: string; defaultTheme?: string } = {}
+                if (typeof cfg.themesDir === 'string') next.themesDir = cfg.themesDir
+                if (typeof cfg.defaultTheme === 'string') next.defaultTheme = cfg.defaultTheme
+                try {
+                  writeConfigOverride(next)
+                  jsonResponse(res, 200, { ok: true })
+                } catch (e) {
+                  jsonResponse(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) })
+                }
+                return
+              }
 
               // Add a user theme: validate, then write <themesDir>/<id>.json.
               if (action === 'add-theme') {
