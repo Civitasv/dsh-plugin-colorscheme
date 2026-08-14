@@ -15,6 +15,7 @@ import type { ChangeEvent } from 'react'
 import { defineStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only imports that pull the context augmentations (settingsScope,
 // locale, the settings.general.item slot contract) into this program.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -49,12 +50,13 @@ const ROW_CSS = `
 .dshcs-dots{display:inline-flex;gap:2px}
 .dshcs-dot{border:1px solid rgba(0,0,0,.18);border-radius:50%;display:inline-block;height:12px;width:12px}
 .dshcs-dot-default{background:linear-gradient(135deg,var(--dsw-static-neutral-bluish-50) 50%,var(--dsw-static-neutral-bluish-900) 50%)}
-.dshcs-error{color:var(--dsw-alias-state-error-primary);font-size:12px}
+.dshcs-error{color:var(--dsw-alias-label-error);font-size:12px;margin:0}
 .dshcs-title-row{align-items:center;display:flex;justify-content:space-between}
-.dshcs-btn{border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;line-height:18px;min-height:26px;padding:2px 10px}
-.dshcs-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dshcs-btn:disabled{opacity:.5;cursor:default}
-.dshcs-btn-primary{border-color:var(--dsw-static-neutral-bluish-400);color:var(--dsw-alias-label-primary)}
+.dshcs-btn{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;line-height:1.5;padding:5px 14px}
+.dshcs-btn:hover:not(:disabled):not(.dshcs-btn-primary){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-dimmed)}
+.dshcs-btn:disabled{opacity:.4;cursor:default}
+.dshcs-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.dshcs-btn-primary{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-3);border-color:transparent}
 .dshcs-chip-wrap{align-items:center;display:inline-flex;gap:4px}
 .dshcs-del{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:10px;height:20px;line-height:1;padding:0 6px}
 .dshcs-del:hover{color:var(--dsw-alias-state-error-primary)}
@@ -64,24 +66,30 @@ const ROW_CSS = `
 .dshcs-form-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
 .dshcs-field{display:flex;flex-direction:column;gap:4px}
 .dshcs-field-label{color:var(--dsw-alias-label-secondary);font-size:11px}
-.dshcs-input{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;min-height:26px;padding:2px 8px}
-.dshcs-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
+.dshcs-input{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);height:34px;font:inherit;color:var(--dsw-alias-label-primary);border-radius:8px;padding:0 12px;font-size:13px;line-height:1.5;min-width:0}
+.dshcs-input:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
+.dshcs-input:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
 .dshcs-color{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;height:28px;padding:2px;width:100%;cursor:pointer}
 .dshcs-field-advanced{color:var(--dsw-alias-label-caption);font-size:11px;grid-column:1/-1;margin-top:4px}
 .dshcs-form-actions{display:flex;gap:8px;justify-content:flex-end}
-.dshcfg-card{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;list-style:none;margin-bottom:10px;overflow:hidden}
-.dshcfg-head{align-items:center;background:transparent;border:0;color:var(--dsw-alias-label-primary);cursor:pointer;display:flex;font:inherit;gap:8px;padding:10px 12px;text-align:left;width:100%}
-.dshcfg-head:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshcfg-name{font-size:13px;font-weight:600}
-.dshcfg-desc{color:var(--dsw-alias-label-tertiary);flex:1;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshcfg-pending{background:rgba(46,160,67,.16);border-radius:999px;color:var(--dsw-alias-state-success-primary);flex:none;font-size:11px;padding:1px 8px}
-.dshcfg-caret{color:var(--dsw-alias-label-tertiary);flex:none;font-size:10px}
-.dshcfg-divider{border-top:1px solid var(--dsw-alias-border-l1);margin:2px 0}
-.dshcfg-body{display:flex;flex-direction:column;gap:12px;padding:4px 12px 12px}
-.dshcfg-field{display:flex;flex-direction:column;gap:4px}
-.dshcfg-label{color:var(--dsw-alias-label-secondary);font-size:12px}
-.dshcfg-hint{color:var(--dsw-alias-label-caption);font-size:11px}
-.dshcfg-actions{display:flex;gap:8px;justify-content:flex-end}
+.dshcfg-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;list-style:none;transition:border-color .16s,background .16s}
+.dshcfg-card:hover{border-color:var(--dsw-alias-label-dimmed)}
+.dshcfg-card-open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}
+.dshcfg-head{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}
+.dshcfg-head:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.dshcfg-head-text{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}
+.dshcfg-name{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:600;line-height:1.4}
+.dshcfg-desc{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5}
+.dshcfg-pending{white-space:nowrap;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);border-radius:999px;flex:none;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}
+.dshcfg-caret{color:var(--dsw-alias-label-tertiary);flex:none;transition:transform .16s}
+.dshcfg-caret-open{transform:rotate(180deg)}
+.dshcfg-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding-bottom:8px;display:flex;flex-direction:column}
+.dshcfg-field{flex-direction:column;gap:6px;padding:12px 0;display:flex}
+.dshcfg-field+.dshcfg-field{border-top:1px solid var(--dsw-alias-border-l2)}
+.dshcfg-label{min-width:0;color:var(--dsw-alias-label-primary);flex:1;font-size:13px;font-weight:500;line-height:1.5}
+.dshcfg-hint{color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}
+.dshcfg-failed{min-width:0;color:var(--dsw-alias-label-error);flex:1;margin:0;font-size:12px;line-height:1.5}
+.dshcfg-actions{border-top:1px solid var(--dsw-alias-border-l2);justify-content:flex-end;align-items:center;gap:8px;padding:12px 0 4px;display:flex}
 `
 if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css=${JSON.stringify(STYLE_TAG)}]`) === null) {
   const tag = document.createElement('style')
@@ -470,17 +478,18 @@ function ColorschemeConfigCard(props: {
   }
 
   return (
-    <li className="dshcfg-card">
+    <li className={open ? 'dshcfg-card dshcfg-card-open' : 'dshcfg-card'}>
       <button type="button" className="dshcfg-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="dshcfg-name">{t('colorscheme.title')}</span>
-        <span className="dshcfg-desc">{t('config.title')}</span>
+        <span className="dshcfg-head-text">
+          <span className="dshcfg-name">{t('colorscheme.title')}</span>
+          <span className="dshcfg-desc">{t('config.title')}</span>
+        </span>
         {dirty ? <span className="dshcfg-pending">{t('config.unsaved')}</span> : null}
-        <span className="dshcfg-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <IconChevronDownOutline14 className={open ? 'dshcfg-caret dshcfg-caret-open' : 'dshcfg-caret'} />
       </button>
       {open ? (
         <div className="dshcfg-body">
           <ColorschemePicker t={t} useStore={useStore} setTheme={setTheme} reloadCatalog={reloadCatalog} />
-          <div className="dshcfg-divider" />
           <label className="dshcfg-field">
             <span className="dshcfg-label">{t('config.themesDir')}</span>
             <input
@@ -491,8 +500,8 @@ function ColorschemeConfigCard(props: {
             />
             <span className="dshcfg-hint">{t('config.themesDirHint')}</span>
           </label>
-          {failed ? <p className="dshcs-error" role="status">{t('config.saveFailed')}</p> : null}
           <div className="dshcfg-actions">
+            {failed ? <p className="dshcfg-failed" role="status">{t('config.saveFailed')}</p> : null}
             <button type="button" className="dshcs-btn" disabled={!dirty || saving} onClick={() => void save(true)}>
               {t('config.discard')}
             </button>
