@@ -20,42 +20,70 @@ This repository ships the built artifacts (`client.js` and `dist/`), so a clone
 works out of the box. You only need `npm install && npm run build` if you
 changed the source.
 
-1. **Clone and enter the directory**:
+### One-command install (recommended)
 
-   ```sh
-   git clone https://github.com/Civitasv/dsh-plugin-colorscheme.git
-   cd dsh-plugin-colorscheme
-   ```
+```sh
+# macOS / Linux
+bash install.sh
 
-2. **Make it resolvable by DSH**: link the plugin into the profile's dependency
-   directory (same level as the packages the dsh installation ships):
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
 
-   ```sh
-   ln -sfn "$PWD" ~/.dsh/profiles/node_modules/dsh-plugin-colorscheme
-   ```
+The script: installs dependencies (including devDependencies, so you can build
+locally) → links the plugin into `~/.dsh/profiles/node_modules` → registers it
+in `cordis.patch.yml` → prompts you to restart and verify.
 
-3. **Register it in the config**: edit `~/.dsh/profiles/web/cordis.patch.yml`:
+### Manual install
 
-   ```yaml
-   - insert:
-       - id: colorscheme
-         name: dsh-plugin-colorscheme
-   ```
+> **Link, don't copy**: a `Copy-Item` snapshot won't pick up source changes and
+> collides on re-install. Use a link (symlink / Junction) to this repository so
+> edits take effect immediately.
 
-4. **Restart `dsh web`**, then switch themes from
-   **Settings → Plugins → Plugin configuration → Colorscheme**.
+```sh
+# 1. Clone and enter the directory
+git clone https://github.com/Civitasv/dsh-plugin-colorscheme.git
+cd dsh-plugin-colorscheme
 
-> **If you have pnpm installed**, you can replace step 2 with `dsh plugin`:
-> it forwards its arguments verbatim to pnpm, running inside the profile
-> directory. Add the plugin by its **absolute path**:
->
-> ```sh
-> dsh plugin --profile web add /absolute/path/to/dsh-plugin-colorscheme
-> ```
->
-> This registers the plugin as a profile dependency (recorded in the profile's
-> `package.json` and installed into its `node_modules`), equivalent to the
-> symlink in step 2. Steps 3–4 are still required.
+# 2. Link into the profile's dependency directory
+#    macOS / Linux:
+ln -sfn "$PWD" ~/.dsh/profiles/node_modules/dsh-plugin-colorscheme
+#    Windows (PowerShell — Junction needs no admin rights):
+#    New-Item -ItemType Junction -Path "$HOME\.dsh\profiles\node_modules\dsh-plugin-colorscheme" -Target "$PWD"
+
+# 3. Register it in the config: edit ~/.dsh/profiles/web/cordis.patch.yml
+#    - insert:
+#        - id: colorscheme
+#          name: dsh-plugin-colorscheme
+
+# 4. Restart dsh web
+```
+
+> **If you have pnpm installed**, you can replace step 2 with
+> `dsh plugin --profile web add <absolute path to this plugin>` (equivalent to
+> the link). If pnpm is missing, install it first: `npm install -g pnpm` (or
+> `corepack enable`).
+
+### Verify
+
+```sh
+dsh --profile web --dump-config | grep dsh-plugin-colorscheme
+# should print: - id: colorscheme / name: dsh-plugin-colorscheme
+```
+
+After restarting, switch themes from
+**Settings → Plugins → Plugin configuration → Colorscheme**.
+
+### Development
+
+The plugin is linked into the profile, so after editing the source:
+
+```sh
+npm run build   # regenerate dist/ and client.js
+```
+
+Server-side changes need a `dsh web` restart; pure client-side changes just
+need a page refresh.
 
 ## Preview
 

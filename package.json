@@ -22,7 +22,9 @@
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
     "presets-licenses",
-    "example-themes"
+    "example-themes",
+    "install.sh",
+    "install.ps1"
   ],
   "dsh": {
     "client": {

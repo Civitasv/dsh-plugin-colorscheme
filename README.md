@@ -18,39 +18,64 @@
 本仓库已包含构建产物（`client.js` 与 `dist/`），克隆后可直接使用；只有修改过
 源码才需要先执行 `npm install && npm run build`。
 
-1. **克隆并进入目录**：
+### 一键安装（推荐）
 
-   ```sh
-   git clone https://github.com/Civitasv/dsh-plugin-colorscheme.git
-   cd dsh-plugin-colorscheme
-   ```
+```sh
+# macOS / Linux
+bash install.sh
 
-2. **让 DSH 能解析它**：把插件链接进 profile 的依赖目录（与 dsh 安装的包
-   同层）：
+# Windows（PowerShell）
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
 
-   ```sh
-   ln -sfn "$PWD" ~/.dsh/profiles/node_modules/dsh-plugin-colorscheme
-   ```
+脚本会：安装依赖（含 devDependencies，便于本地开发）→ 链接进
+`~/.dsh/profiles/node_modules` → 注册 `cordis.patch.yml` → 提示重启与验证。
 
-3. **注册到配置**：编辑 `~/.dsh/profiles/web/cordis.patch.yml`：
+### 手动安装
 
-   ```yaml
-   - insert:
-       - id: colorscheme
-         name: dsh-plugin-colorscheme
-   ```
+> **用链接而不是拷贝**：`Copy-Item` 复制一份后改源码不会同步，重复安装还会
+> 冲突；用下面的链接（Junction / 符号链接）指向本仓库，改源码即时生效。
 
-4. **重启 `dsh web`**，打开 **设置 → 插件 → 插件配置 → 配色方案** 卡片即可切换主题。
+```sh
+# 1. 克隆并进入目录
+git clone https://github.com/Civitasv/dsh-plugin-colorscheme.git
+cd dsh-plugin-colorscheme
 
-> **装了 pnpm 的话**，也可以用 `dsh plugin` 代替第 2 步：它会把这些参数原样
-> 转交给 pnpm，在 profile 目录里安装。用插件目录的**绝对路径**执行：
->
-> ```sh
-> dsh plugin --profile web add /绝对/路径/dsh-plugin-colorscheme
-> ```
->
-> 这会把这插件登记为 profile 的依赖（写入 profile 的 `package.json` 并安装到
-> 其 `node_modules`），与第 2 步的软链接效果等价；之后仍需执行第 3、4 步。
+# 2. 链接进 profile 依赖目录
+#    macOS / Linux：
+ln -sfn "$PWD" ~/.dsh/profiles/node_modules/dsh-plugin-colorscheme
+#    Windows（PowerShell，Junction 无需管理员权限）：
+#    New-Item -ItemType Junction -Path "$HOME\.dsh\profiles\node_modules\dsh-plugin-colorscheme" -Target "$PWD"
+
+# 3. 注册到 ~/.dsh/profiles/web/cordis.patch.yml
+#    - insert:
+#        - id: colorscheme
+#          name: dsh-plugin-colorscheme
+
+# 4. 重启 dsh web
+```
+
+> 装了 pnpm 的话，也可以用 `dsh plugin --profile web add <本插件绝对路径>` 代替
+> 第 2 步（等价于链接）。pnpm 未安装时先 `npm install -g pnpm`（或 `corepack enable`）。
+
+### 验证
+
+```sh
+dsh --profile web --dump-config | grep dsh-plugin-colorscheme
+# 输出应包含：- id: colorscheme / name: dsh-plugin-colorscheme
+```
+
+重启后打开 **设置 → 插件 → 插件配置 → 配色方案** 卡片即可切换主题。
+
+### 开发
+
+插件以链接方式接入 profile，改源码后：
+
+```sh
+npm run build   # 重新生成 dist/ 与 client.js
+```
+
+server 端改动需重启 `dsh web`；纯 client 端改动刷新页面即可。
 
 ## 预览
 
